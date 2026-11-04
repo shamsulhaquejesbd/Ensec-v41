@@ -31,6 +31,10 @@ import {
   FileUp,
   AlertCircle,
   Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { useERP } from '../../context/ERPContext.tsx';
 import { RawMaterial } from '../../types/erp.ts';
@@ -88,6 +92,15 @@ export const RawMaterialsPage: React.FC<RawMaterialsPageProps> = ({ onNavigate }
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [stockFilter, setStockFilter] = useState<'ALL' | 'LOW' | 'ADEQUATE'>('ALL');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'Local' | 'Import'>('ALL');
+
+  // Pagination state (default: 10 records per page)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  // Reset to page 1 whenever search query, category, stock, or type filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory, stockFilter, typeFilter, pageSize]);
 
   // Create Material form fields
   const [matCategory, setMatCategory] = useState<RawMaterial['category']>('Cell');
@@ -305,6 +318,45 @@ export const RawMaterialsPage: React.FC<RawMaterialsPageProps> = ({ onNavigate }
 
     return matchesSearch && matchesCategory && matchesType && matchesStock;
   });
+
+  // Pagination calculations (10 records per page by default)
+  const totalRecords = filteredMaterials.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedMaterials = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * pageSize;
+    return filteredMaterials.slice(startIndex, startIndex + pageSize);
+  }, [filteredMaterials, safeCurrentPage, pageSize]);
+
+  const startRecord = totalRecords === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const endRecord = Math.min(safeCurrentPage * pageSize, totalRecords);
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (safeCurrentPage <= 4) {
+        for (let i = 1; i <= 5; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (safeCurrentPage >= totalPages - 3) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(safeCurrentPage - 1);
+        pages.push(safeCurrentPage);
+        pages.push(safeCurrentPage + 1);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
 
   // Export & Upload State
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -1052,11 +1104,18 @@ export const RawMaterialsPage: React.FC<RawMaterialsPageProps> = ({ onNavigate }
       <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
         {/* Table Title & Sync Status */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <h2 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+          <h2 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
             <span>Raw Materials Master Registry</span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-              {filteredMaterials.length} Items Listed
+              {filteredMaterials.length === rawMaterials.length
+                ? `${totalRecords} Total Items`
+                : `${totalRecords} of ${rawMaterials.length} Filtered`}
             </span>
+            {totalRecords > 0 && (
+              <span className="text-xs text-slate-500 font-normal">
+                • Page {safeCurrentPage} of {totalPages}
+              </span>
+            )}
           </h2>
           <div className="text-xs text-slate-500 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -1191,7 +1250,7 @@ export const RawMaterialsPage: React.FC<RawMaterialsPageProps> = ({ onNavigate }
                   </td>
                 </tr>
               ) : (
-                filteredMaterials.map((rm, idx) => {
+                paginatedMaterials.map((rm, idx) => {
                   const isLow = (rm.stockKushtia || 0) <= (rm.reorderLevel || 0);
                   const itemBatches = (inventoryBatches || []).filter(
                     (b) => b.materialId === rm.id || b.materialCode === rm.code
@@ -1338,6 +1397,132 @@ export const RawMaterialsPage: React.FC<RawMaterialsPageProps> = ({ onNavigate }
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Bar */}
+        {filteredMaterials.length > 0 && (
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
+            {/* Range & Total Records Info */}
+            <div className="flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400">
+              <div>
+                Showing{' '}
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  {startRecord}–{endRecord}
+                </span>{' '}
+                of{' '}
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  {totalRecords}
+                </span>{' '}
+                raw material records
+                {filteredMaterials.length !== rawMaterials.length && (
+                  <span className="text-slate-400 dark:text-slate-500 ml-1">
+                    (filtered from {rawMaterials.length} total)
+                  </span>
+                )}
+              </div>
+
+              {/* Page Size Selector */}
+              <div className="flex items-center gap-1.5 ml-0 sm:ml-2 pl-0 sm:pl-2 border-l-0 sm:border-l border-slate-200 dark:border-slate-700">
+                <span className="text-[11px] text-slate-400">Per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold focus:outline-hidden focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="flex items-center gap-1 flex-wrap justify-center">
+              {/* First Page */}
+              <button
+                type="button"
+                onClick={() => setCurrentPage(1)}
+                disabled={safeCurrentPage <= 1}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                title="First Page"
+              >
+                <ChevronsLeft className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Prev Page */}
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage <= 1}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition font-semibold cursor-pointer text-xs"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Previous</span>
+              </button>
+
+              {/* Page Number Buttons */}
+              <div className="flex items-center gap-1 mx-1">
+                {getPageNumbers().map((pageItem, pIdx) => {
+                  if (pageItem === '...') {
+                    return (
+                      <span
+                        key={`ellipsis-${pIdx}`}
+                        className="px-1.5 py-1 text-slate-400 select-none font-bold text-xs"
+                      >
+                        …
+                      </span>
+                    );
+                  }
+
+                  const pageNum = Number(pageItem);
+                  const isActive = safeCurrentPage === pageNum;
+
+                  return (
+                    <button
+                      key={`page-${pageNum}`}
+                      type="button"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition flex items-center justify-center cursor-pointer ${
+                        isActive
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Next Page */}
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage >= totalPages}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition font-semibold cursor-pointer text-xs"
+                title="Next Page"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Last Page */}
+              <button
+                type="button"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safeCurrentPage >= totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                title="Last Page"
+              >
+                <ChevronsRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CREATE RAW MATERIAL MODAL */}
