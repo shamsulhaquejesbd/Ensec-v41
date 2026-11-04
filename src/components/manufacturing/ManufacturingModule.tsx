@@ -96,31 +96,40 @@ export const ManufacturingModule: React.FC<ManufacturingModuleProps> = ({ initia
   const totalProductionCostBDT = rawMaterialCostBDT + conversionCostBDT;
   const costPerUnitBDT = Math.round(totalProductionCostBDT / (plannedQty || 1));
 
-  const handleCreateBatch = (e: React.FormEvent) => {
+  const [isSubmittingBatch, setIsSubmittingBatch] = useState(false);
+
+  const handleCreateBatch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProduct) return;
+    if (!selectedProduct || isSubmittingBatch) return;
 
-    createProductionOrder({
-      date: new Date().toISOString().substring(0, 10),
-      productId: selectedProduct.id,
-      productName: selectedProduct.name,
-      model: selectedProduct.model,
-      plannedQty: Number(plannedQty),
-      manufacturingDate: new Date().toISOString().substring(0, 10),
-      status: 'In Production',
-      rawMaterialCostBDT,
-      optimumLaborCostBDT: Number(optimumLaborCostBDT),
-      factoryOverheadBDT: Number(factoryOverheadBDT),
-      conversionCostBDT,
-      totalProductionCostBDT,
-      costPerUnitBDT,
-      wastagePercent: Number(wastagePercent),
-      scrapKg: Number(scrapKg),
-      technicianInCharge,
-      notes: batchNotes,
-    });
+    try {
+      setIsSubmittingBatch(true);
+      await createProductionOrder({
+        date: new Date().toISOString().substring(0, 10),
+        productId: selectedProduct.id,
+        productName: selectedProduct.name,
+        model: selectedProduct.model,
+        plannedQty: Number(plannedQty),
+        manufacturingDate: new Date().toISOString().substring(0, 10),
+        status: 'In Production',
+        rawMaterialCostBDT,
+        optimumLaborCostBDT: Number(optimumLaborCostBDT),
+        factoryOverheadBDT: Number(factoryOverheadBDT),
+        conversionCostBDT,
+        totalProductionCostBDT,
+        costPerUnitBDT,
+        wastagePercent: Number(wastagePercent),
+        scrapKg: Number(scrapKg),
+        technicianInCharge,
+        notes: batchNotes,
+      });
 
-    setShowNewBatchModal(false);
+      setShowNewBatchModal(false);
+    } catch (err) {
+      console.error('Failed to create batch:', err);
+    } finally {
+      setIsSubmittingBatch(false);
+    }
   };
 
   // BOM Editing State
@@ -466,47 +475,58 @@ export const ManufacturingModule: React.FC<ManufacturingModuleProps> = ({ initia
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                  {productionOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                      <td className="p-3">
-                        <div className="font-mono font-bold text-blue-600 dark:text-blue-400">{order.orderNumber}</div>
-                        <div className="font-mono text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
-                          Batch: {order.batchNumber}
-                        </div>
-                        <div className="text-[10px] text-slate-400">{order.date}</div>
+                  {productionOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="p-12 text-center text-slate-400">
+                        <Building className="w-10 h-10 mx-auto mb-2 opacity-30 text-slate-400" />
+                        <p className="font-semibold text-sm">No production orders scheduled yet.</p>
+                        <p className="text-xs mt-1 text-slate-400">
+                          Click "Launch Batch" to schedule a factory assembly batch with automated BOM calculation.
+                        </p>
                       </td>
-                      <td className="p-3">
-                        <div className="font-semibold text-slate-900 dark:text-white">{order.productName}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">Model: {order.model}</div>
-                      </td>
-                      <td className="p-3">
-                        <div className="font-bold text-slate-900 dark:text-white">
-                          {order.completedQty} / {order.plannedQty} Units
-                        </div>
-                        <div className="text-[10px] text-slate-400">In Kushtia Plant</div>
-                      </td>
-                      <td className="p-3 font-mono">৳ {order.rawMaterialCostBDT.toLocaleString()}</td>
-                      <td className="p-3 font-mono text-purple-600 dark:text-purple-400">
-                        ৳ {order.conversionCostBDT.toLocaleString()}
-                      </td>
-                      <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">
-                        ৳ {order.costPerUnitBDT.toLocaleString()}
-                      </td>
-                      <td className="p-3">
-                        <div className="text-slate-700 dark:text-slate-300">{order.wastagePercent}% waste</div>
-                        <div className="text-[10px] text-slate-400">{order.scrapKg} kg scrap</div>
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            order.status === 'Completed' || order.status === 'Transferred'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                      </td>
+                    </tr>
+                  ) : (
+                    productionOrders.map((order) => (
+                      <tr key={order.id || order.orderNumber} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                        <td className="p-3">
+                          <div className="font-mono font-bold text-blue-600 dark:text-blue-400">{order.orderNumber}</div>
+                          <div className="font-mono text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                            Batch: {order.batchNumber}
+                          </div>
+                          <div className="text-[10px] text-slate-400">{order.date || order.startDate}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-semibold text-slate-900 dark:text-white">{order.productName}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">Model: {order.model}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-bold text-slate-900 dark:text-white">
+                            {order.completedQty || 0} / {order.plannedQty || 0} Units
+                          </div>
+                          <div className="text-[10px] text-slate-400">In Kushtia Plant</div>
+                        </td>
+                        <td className="p-3 font-mono">৳ {(order.rawMaterialCostBDT || 0).toLocaleString()}</td>
+                        <td className="p-3 font-mono text-purple-600 dark:text-purple-400">
+                          ৳ {(order.conversionCostBDT || 0).toLocaleString()}
+                        </td>
+                        <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">
+                          ৳ {(order.costPerUnitBDT || 0).toLocaleString()}
+                        </td>
+                        <td className="p-3">
+                          <div className="text-slate-700 dark:text-slate-300">{order.wastagePercent || 0}% waste</div>
+                          <div className="text-[10px] text-slate-400">{order.scrapKg || 0} kg scrap</div>
+                        </td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              order.status === 'Completed' || order.status === 'Transferred'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            }`}
+                          >
+                            {order.status}
+                          </span>
+                        </td>
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
                           {order.status === 'In Production' && (
@@ -551,7 +571,7 @@ export const ManufacturingModule: React.FC<ManufacturingModuleProps> = ({ initia
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  )))}
                 </tbody>
               </table>
             </div>
@@ -852,9 +872,10 @@ export const ManufacturingModule: React.FC<ManufacturingModuleProps> = ({ initia
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-xs"
+                  disabled={isSubmittingBatch}
+                  className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                 >
-                  Confirm & Schedule Batch
+                  {isSubmittingBatch ? 'Scheduling Batch...' : 'Confirm & Schedule Batch'}
                 </button>
               </div>
             </form>
